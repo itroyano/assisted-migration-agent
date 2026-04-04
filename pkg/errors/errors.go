@@ -346,3 +346,30 @@ func IsUnknownEventKindError(err error) bool {
 	var e *UnknownEventKindError
 	return errors.As(err, &e)
 }
+
+// InvalidVersionError indicates a version mismatch
+type InvalidVersionError struct {
+	Expected string
+	Actual   string
+}
+
+func NewVddkInvalidVersionError(expected, actual string) *InvalidVersionError {
+	return &InvalidVersionError{
+		Expected: expected,
+		Actual:   actual,
+	}
+}
+
+func (e *InvalidVersionError) Error() string {
+	parts := strings.Split(e.Actual, ".")
+	if len(parts) > 2 {
+		e.Actual = strings.Join(parts[:2], ".")
+	}
+
+	return fmt.Sprintf("major.minor version mismatch: expected %s, got %s", e.Expected, e.Actual)
+}
+
+func IsInvalidVersionError(err error) bool {
+	var e *InvalidVersionError
+	return errors.As(err, &e)
+}
