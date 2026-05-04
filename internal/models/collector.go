@@ -31,6 +31,14 @@ const (
 	CollectorLegacyStateCollected             CollectorStateType = "up-to-date"
 )
 
+// This list should represent the least permissions required for the collection.
+// in order to determine whether the user has minimum required permissions.
+var CollectorRequiredPrivileges = []string{
+	"System.View",
+	"System.Read",
+	"System.Anonymous",
+}
+
 func (c CollectorStateType) ToV1() CollectorStateType {
 	switch c {
 	case CollectorStateReady:
