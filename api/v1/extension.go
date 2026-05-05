@@ -395,6 +395,7 @@ func NewVmUtilizationDetailsFromModel(d models.VmUtilizationDetails) VmUtilizati
 func NewRightsizingClusterUtilizationFromModel(c models.RightsizingClusterUtilization) RightsizingClusterUtilization {
 	return RightsizingClusterUtilization{
 		ClusterId:                c.ClusterID,
+		ClusterName:              c.ClusterName,
 		VmCount:                  c.VMCount,
 		CpuAvg:                   c.CpuAvg,
 		CpuP95:                   c.CpuP95,

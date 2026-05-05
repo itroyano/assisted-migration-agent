@@ -21,10 +21,10 @@ type ServerInterface interface {
 	SetAgentMode(c *gin.Context)
 	// Get cluster-level utilization aggregates for the latest completed report
 	// (GET /cluster_rightsizing)
-	GetLatestRightsizingClusters(c *gin.Context)
+	GetLatestRightsizingClusters(c *gin.Context, params GetLatestRightsizingClustersParams)
 	// Get cluster-level utilization aggregates for a specific report
 	// (GET /cluster_rightsizing/{report_id})
-	GetRightsizingReportClusters(c *gin.Context, reportId string)
+	GetRightsizingReportClusters(c *gin.Context, reportId string, params GetRightsizingReportClustersParams)
 	// Stop collection
 	// (DELETE /collector)
 	StopCollector(c *gin.Context)
@@ -164,6 +164,19 @@ func (siw *ServerInterfaceWrapper) SetAgentMode(c *gin.Context) {
 // GetLatestRightsizingClusters operation middleware
 func (siw *ServerInterfaceWrapper) GetLatestRightsizingClusters(c *gin.Context) {
 
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetLatestRightsizingClustersParams
+
+	// ------------- Optional query parameter "byExpression" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "byExpression", c.Request.URL.Query(), &params.ByExpression)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter byExpression: %w", err), http.StatusBadRequest)
+		return
+	}
+
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -171,7 +184,7 @@ func (siw *ServerInterfaceWrapper) GetLatestRightsizingClusters(c *gin.Context) 
 		}
 	}
 
-	siw.Handler.GetLatestRightsizingClusters(c)
+	siw.Handler.GetLatestRightsizingClusters(c, params)
 }
 
 // GetRightsizingReportClusters operation middleware
@@ -188,6 +201,17 @@ func (siw *ServerInterfaceWrapper) GetRightsizingReportClusters(c *gin.Context) 
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRightsizingReportClustersParams
+
+	// ------------- Optional query parameter "byExpression" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "byExpression", c.Request.URL.Query(), &params.ByExpression)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter byExpression: %w", err), http.StatusBadRequest)
+		return
+	}
+
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -195,7 +219,7 @@ func (siw *ServerInterfaceWrapper) GetRightsizingReportClusters(c *gin.Context) 
 		}
 	}
 
-	siw.Handler.GetRightsizingReportClusters(c, reportId)
+	siw.Handler.GetRightsizingReportClusters(c, reportId, params)
 }
 
 // StopCollector operation middleware

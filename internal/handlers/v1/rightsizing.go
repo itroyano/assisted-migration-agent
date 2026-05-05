@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,6 +10,7 @@ import (
 	v1 "github.com/kubev2v/assisted-migration-agent/api/v1"
 	"github.com/kubev2v/assisted-migration-agent/internal/models"
 	srvErrors "github.com/kubev2v/assisted-migration-agent/pkg/errors"
+	"github.com/kubev2v/assisted-migration-agent/pkg/filter"
 )
 
 // ListRightsizingReports returns all stored rightsizing reports.
@@ -106,8 +108,16 @@ func (h *Handler) GetVMUtilization(c *gin.Context, id string) {
 
 // GetLatestRightsizingClusters returns cluster utilization from the latest completed report.
 // (GET /rightsizing/clusters)
-func (h *Handler) GetLatestRightsizingClusters(c *gin.Context) {
-	reportID, clusters, err := h.rightsizingSrv.ListLatestClusterUtilization(c.Request.Context())
+func (h *Handler) GetLatestRightsizingClusters(c *gin.Context, params v1.GetLatestRightsizingClustersParams) {
+	filterExpr := ""
+	if params.ByExpression != nil {
+		if _, err := filter.ParseWithClusterMap([]byte(*params.ByExpression)); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("expression filter is invalid: %v", err)})
+			return
+		}
+		filterExpr = *params.ByExpression
+	}
+	reportID, clusters, err := h.rightsizingSrv.ListLatestClusterUtilization(c.Request.Context(), filterExpr)
 	if err != nil {
 		zap.S().Named("rightsizing_handler").Errorw("failed to list latest cluster utilization", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -130,7 +140,7 @@ func (h *Handler) GetLatestRightsizingClusters(c *gin.Context) {
 
 // GetRightsizingReportClusters returns cluster utilization for a specific report.
 // (GET /rightsizing/{report_id}/clusters)
-func (h *Handler) GetRightsizingReportClusters(c *gin.Context, reportId string) {
+func (h *Handler) GetRightsizingReportClusters(c *gin.Context, reportId string, params v1.GetRightsizingReportClustersParams) {
 	// Validate report exists first.
 	if _, err := h.rightsizingSrv.GetReport(c.Request.Context(), reportId); err != nil {
 		if srvErrors.IsResourceNotFoundError(err) {
@@ -142,7 +152,15 @@ func (h *Handler) GetRightsizingReportClusters(c *gin.Context, reportId string) 
 		return
 	}
 
-	clusters, err := h.rightsizingSrv.ListClusterUtilization(c.Request.Context(), reportId)
+	filterExpr := ""
+	if params.ByExpression != nil {
+		if _, err := filter.ParseWithClusterMap([]byte(*params.ByExpression)); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("expression filter is invalid: %v", err)})
+			return
+		}
+		filterExpr = *params.ByExpression
+	}
+	clusters, err := h.rightsizingSrv.ListClusterUtilization(c.Request.Context(), reportId, filterExpr)
 	if err != nil {
 		zap.S().Named("rightsizing_handler").Errorw("failed to list cluster utilization", "report_id", reportId, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

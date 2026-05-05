@@ -261,10 +261,10 @@ func (m *MockRightsizingService) GetVMUtilization(ctx context.Context, vmID stri
 	return m.GetUtilizationResult, m.GetUtilizationError
 }
 
-func (m *MockRightsizingService) ListClusterUtilization(ctx context.Context, reportID string) ([]models.RightsizingClusterUtilization, error) {
+func (m *MockRightsizingService) ListClusterUtilization(ctx context.Context, reportID, filterExpr string) ([]models.RightsizingClusterUtilization, error) {
 	return m.ClusterUtilizationResult, m.ClusterUtilizationError
 }
 
-func (m *MockRightsizingService) ListLatestClusterUtilization(ctx context.Context) (string, []models.RightsizingClusterUtilization, error) {
+func (m *MockRightsizingService) ListLatestClusterUtilization(ctx context.Context, filterExpr string) (string, []models.RightsizingClusterUtilization, error) {
 	return "", m.LatestClusterUtilizationResult, m.LatestClusterUtilizationError
 }

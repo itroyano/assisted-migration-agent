@@ -66,8 +66,8 @@ type RightsizingService interface {
 	ListReports(ctx context.Context) ([]models.RightsizingReportSummary, error)
 	GetReport(ctx context.Context, id string) (*models.RightsizingReport, error)
 	GetVMUtilization(ctx context.Context, vmID string) (*models.VmUtilizationDetails, error)
-	ListClusterUtilization(ctx context.Context, reportID string) ([]models.RightsizingClusterUtilization, error)
-	ListLatestClusterUtilization(ctx context.Context) (string, []models.RightsizingClusterUtilization, error)
+	ListClusterUtilization(ctx context.Context, reportID, filterExpr string) ([]models.RightsizingClusterUtilization, error)
+	ListLatestClusterUtilization(ctx context.Context, filterExpr string) (string, []models.RightsizingClusterUtilization, error)
 }
 
 type Handler struct {

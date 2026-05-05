@@ -399,7 +399,7 @@ var _ = Describe("RightSizingStore", func() {
 			id, _, _ := s.RightSizing().CreateReport(ctx, testReport(), 0, 1)
 			_ = s.RightSizing().IncrementWrittenBatchCount(ctx, id)
 
-			clusters, err := s.RightSizing().ListClusterUtilization(ctx, id)
+			clusters, err := s.RightSizing().ListClusterUtilization(ctx, id, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(clusters).To(BeEmpty())
 		})
@@ -418,23 +418,69 @@ var _ = Describe("RightSizingStore", func() {
 			// Seed cluster_id and provisioned_cpus directly (vinfo is empty in test DB).
 			_, err := db.Exec(`
                 UPDATE rightsizing_vm_utilization
-                SET cluster_id = 'cluster-1', provisioned_cpus = 4
+                SET cluster_id = 'domain-c1', cluster_name = 'cluster-1', provisioned_cpus = 4
                 WHERE report_id = ?`, id)
 			Expect(err).NotTo(HaveOccurred())
 
-			clusters, err := s.RightSizing().ListClusterUtilization(ctx, id)
+			clusters, err := s.RightSizing().ListClusterUtilization(ctx, id, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(clusters).To(HaveLen(1))
-			Expect(clusters[0].ClusterID).To(Equal("cluster-1"))
+			Expect(clusters[0].ClusterID).To(Equal("domain-c1"))
+			Expect(clusters[0].ClusterName).To(Equal("cluster-1"))
 			Expect(clusters[0].VMCount).To(Equal(2))
 			// Weighted avg CPU: (8000/100 * 4 + 2000/100 * 4) / (4+4) = (320 + 80) / 8 = 50%
 			Expect(clusters[0].CpuAvg).To(BeNumerically("~", 50.0, 0.01))
+		})
+
+		It("should return only the matching cluster when cluster_id filter is provided", func() {
+			id, _, _ := s.RightSizing().CreateReport(ctx, testReport(), 4, 1)
+			Expect(s.RightSizing().WriteBatch(ctx, id, []models.RightSizingMetric{
+				{VMName: "vm-a", MOID: "vm-100", MetricKey: "cpu.usage.average",
+					SampleCount: 10, Average: 8000, P95: 8000, Max: 8000, Latest: 8000},
+				{VMName: "vm-b", MOID: "vm-200", MetricKey: "cpu.usage.average",
+					SampleCount: 10, Average: 2000, P95: 2000, Max: 2000, Latest: 2000},
+				{VMName: "vm-c", MOID: "vm-300", MetricKey: "cpu.usage.average",
+					SampleCount: 10, Average: 5000, P95: 5000, Max: 5000, Latest: 5000},
+				{VMName: "vm-d", MOID: "vm-400", MetricKey: "cpu.usage.average",
+					SampleCount: 10, Average: 1000, P95: 1000, Max: 1000, Latest: 1000},
+			})).To(Succeed())
+			Expect(s.RightSizing().IncrementWrittenBatchCount(ctx, id)).To(Succeed())
+			Expect(s.RightSizing().ComputeAndStoreUtilization(ctx, id)).To(Succeed())
+
+			// Assign vm-100 and vm-200 to cluster-A, vm-300 and vm-400 to cluster-B.
+			_, err := db.Exec(`
+                UPDATE rightsizing_vm_utilization
+                SET cluster_id = 'domain-c1', cluster_name = 'cluster-A', provisioned_cpus = 4
+                WHERE report_id = ? AND moid IN ('vm-100', 'vm-200')`, id)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = db.Exec(`
+                UPDATE rightsizing_vm_utilization
+                SET cluster_id = 'domain-c2', cluster_name = 'cluster-B', provisioned_cpus = 4
+                WHERE report_id = ? AND moid IN ('vm-300', 'vm-400')`, id)
+			Expect(err).NotTo(HaveOccurred())
+
+			// No filter — both clusters returned.
+			all, err := s.RightSizing().ListClusterUtilization(ctx, id, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(all).To(HaveLen(2))
+
+			// Filter to cluster-A only.
+			filtered, err := s.RightSizing().ListClusterUtilization(ctx, id, "cluster_id = 'domain-c1'")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(filtered).To(HaveLen(1))
+			Expect(filtered[0].ClusterID).To(Equal("domain-c1"))
+			Expect(filtered[0].ClusterName).To(Equal("cluster-A"))
+
+			// Filter to a non-existent cluster — empty result, no error.
+			none, err := s.RightSizing().ListClusterUtilization(ctx, id, "cluster_id = 'domain-c999'")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(none).To(BeEmpty())
 		})
 	})
 
 	Describe("ListLatestClusterUtilization", func() {
 		It("should return empty when no completed report exists", func() {
-			reportID, clusters, err := s.RightSizing().ListLatestClusterUtilization(ctx)
+			reportID, clusters, err := s.RightSizing().ListLatestClusterUtilization(ctx, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reportID).To(BeEmpty())
 			Expect(clusters).To(BeEmpty())

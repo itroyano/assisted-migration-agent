@@ -575,6 +575,13 @@ paths:
     get:
       summary: Get cluster-level utilization aggregates for the latest completed report
       operationId: getLatestRightsizingClusters
+      parameters:
+        - name: byExpression
+          in: query
+          required: false
+          description: Filter DSL expression (e.g. "cluster_id = 'domain-c123'"). Omit to return all clusters.
+          schema:
+            type: string
       responses:
         '200':
           description: Cluster utilization aggregates
@@ -596,6 +603,12 @@ paths:
           in: path
           required: true
           description: Rightsizing report UUID
+          schema:
+            type: string
+        - name: byExpression
+          in: query
+          required: false
+          description: Filter DSL expression (e.g. "cluster_id = 'domain-c123'"). Omit to return all clusters.
           schema:
             type: string
       responses:
@@ -1788,6 +1801,7 @@ components:
       type: object
       required:
         - cluster_id
+        - cluster_name
         - vm_count
         - cpu_avg
         - cpu_p95
@@ -1803,6 +1817,10 @@ components:
       properties:
         cluster_id:
           type: string
+          description: vSphere MoRef of the ClusterComputeResource (e.g. "domain-c123").
+        cluster_name:
+          type: string
+          description: Display name of the cluster as reported by vCenter (e.g. "production-cluster").
         vm_count:
           type: integer
           description: Number of VMs with utilization data in this cluster

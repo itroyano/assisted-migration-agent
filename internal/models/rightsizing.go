@@ -134,6 +134,7 @@ type RightsizingReport struct {
 // p95/max are weighted summaries of per-VM peaks, not true cluster-wide percentiles.
 type RightsizingClusterUtilization struct {
 	ClusterID                string
+	ClusterName              string
 	VMCount                  int
 	CpuAvg                   float64
 	CpuP95                   float64

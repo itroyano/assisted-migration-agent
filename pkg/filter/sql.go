@@ -199,6 +199,17 @@ var groupMapFn MapFunc = func(name string) (string, FieldType, error) {
 	}
 }
 
+var clusterMapFn MapFunc = func(name string) (string, FieldType, error) {
+	switch name {
+	case "cluster_id":
+		return "cluster_id", StringField, nil
+	case "cluster_name":
+		return "cluster_name", StringField, nil
+	default:
+		return "", 0, fmt.Errorf("unknown cluster filter field: %s", name)
+	}
+}
+
 func toSql(expr Expression, mf MapFunc) (sq.Sqlizer, error) {
 	switch e := expr.(type) {
 	case *binaryExpression:

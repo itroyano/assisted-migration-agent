@@ -210,13 +210,15 @@ func (s *RightsizingService) GetVMUtilization(ctx context.Context, vmID string) 
 }
 
 // ListClusterUtilization returns weighted cluster utilization for a specific report.
-func (s *RightsizingService) ListClusterUtilization(ctx context.Context, reportID string) ([]models.RightsizingClusterUtilization, error) {
-	return s.store.RightSizing().ListClusterUtilization(ctx, reportID)
+// filterExpr is an optional filter DSL expression (e.g. "cluster_id = 'domain-c123'"); empty means no filter.
+func (s *RightsizingService) ListClusterUtilization(ctx context.Context, reportID, filterExpr string) ([]models.RightsizingClusterUtilization, error) {
+	return s.store.RightSizing().ListClusterUtilization(ctx, reportID, filterExpr)
 }
 
 // ListLatestClusterUtilization returns weighted cluster utilization for the latest completed report.
-func (s *RightsizingService) ListLatestClusterUtilization(ctx context.Context) (string, []models.RightsizingClusterUtilization, error) {
-	return s.store.RightSizing().ListLatestClusterUtilization(ctx)
+// filterExpr is an optional filter DSL expression (e.g. "cluster_id = 'domain-c123'"); empty means no filter.
+func (s *RightsizingService) ListLatestClusterUtilization(ctx context.Context, filterExpr string) (string, []models.RightsizingClusterUtilization, error) {
+	return s.store.RightSizing().ListLatestClusterUtilization(ctx, filterExpr)
 }
 
 // applyCollectionDefaults fills zero-value params with package defaults.
@@ -247,7 +249,13 @@ func buildVSphereConfig(params models.RightsizingParams, lookback time.Duration)
 		VCenterURL: params.URL,
 		Username:   params.Username,
 		Password:   params.Password,
-		Insecure:   true, // TODO issue 4: wire from agent config
+		// TLS verification is skipped because on-prem vCenter deployments almost universally use
+		// self-signed certificates, and even CA-signed certs frequently fail verification due to
+		// SAN mismatches (the cert is issued for the FQDN but the agent may connect via IP or alias).
+		// So, in order to provide a valid cert, the vCenter admins will need to hav a cert for each of the possible IPs/aliases the agent might use.
+		// The risk is accepted: the agent runs inside the customer's own network, so the MITM
+		// threat model is low.
+		Insecure:   true,
 		NameFilter: params.NameFilter,
 		ClusterID:  params.ClusterID,
 		Lookback:   lookback,

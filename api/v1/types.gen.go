@@ -421,7 +421,11 @@ type RightsizingClusterListResponse struct {
 
 // RightsizingClusterUtilization defines model for RightsizingClusterUtilization.
 type RightsizingClusterUtilization struct {
+	// ClusterId vSphere MoRef of the ClusterComputeResource (e.g. "domain-c123").
 	ClusterId string `json:"cluster_id"`
+
+	// ClusterName Display name of the cluster as reported by vCenter (e.g. "production-cluster").
+	ClusterName string `json:"cluster_name"`
 
 	// Confidence SUM(vCPUs × confidence%) / SUM(vCPUs). vCPU-weighted data coverage (0–100 %). Interpret utilization cautiously when low.
 	Confidence float64 `json:"confidence"`
@@ -875,6 +879,18 @@ type VmUtilizationDetails struct {
 	// ProvisionedMemoryMb Provisioned RAM (MB)
 	ProvisionedMemoryMb int    `json:"provisioned_memory_mb"`
 	VmName              string `json:"vm_name"`
+}
+
+// GetLatestRightsizingClustersParams defines parameters for GetLatestRightsizingClusters.
+type GetLatestRightsizingClustersParams struct {
+	// ByExpression Filter DSL expression (e.g. "cluster_id = 'domain-c123'"). Omit to return all clusters.
+	ByExpression *string `form:"byExpression,omitempty" json:"byExpression,omitempty"`
+}
+
+// GetRightsizingReportClustersParams defines parameters for GetRightsizingReportClusters.
+type GetRightsizingReportClustersParams struct {
+	// ByExpression Filter DSL expression (e.g. "cluster_id = 'domain-c123'"). Omit to return all clusters.
+	ByExpression *string `form:"byExpression,omitempty" json:"byExpression,omitempty"`
 }
 
 // GetForecasterRunsParams defines parameters for GetForecasterRuns.

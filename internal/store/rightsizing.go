@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	srvErrors "github.com/kubev2v/assisted-migration-agent/pkg/errors"
+	"github.com/kubev2v/assisted-migration-agent/pkg/filter"
 
 	"github.com/kubev2v/assisted-migration-agent/internal/models"
 )
@@ -206,7 +207,7 @@ INSERT INTO rightsizing_vm_utilization
      cpu_avg_pct, cpu_p95_pct, cpu_max_pct, cpu_latest_pct,
      mem_avg_pct, mem_p95_pct, mem_max_pct, mem_latest_pct,
      disk_pct, confidence_pct,
-     cluster_id, provisioned_cpus, provisioned_memory_mb, provisioned_disk_kb)
+     cluster_id, cluster_name, provisioned_cpus, provisioned_memory_mb, provisioned_disk_kb)
 SELECT
     rm.report_id,
     rm.moid,
@@ -224,15 +225,17 @@ SELECT
       * 100.0 AS disk_pct,
     MAX(CASE WHEN rm.metric_key = 'cpu.usage.average' THEN rm.sample_count END)
       * 100.0 / NULLIF(r.expected_sample_count, 0) AS confidence_pct,
-    v."Cluster"                                                                   AS cluster_id,
+    vc."Object ID"                                                                AS cluster_id,
+    v."Cluster"                                                                   AS cluster_name,
     CAST(v."CPUs" AS INTEGER)                                                     AS provisioned_cpus,
     CAST(v."Memory" AS INTEGER)                                                   AS provisioned_memory_mb,
     MAX(CASE WHEN rm.metric_key = 'disk.provisioned.latest' THEN rm.latest END)  AS provisioned_disk_kb
 FROM rightsizing_metrics rm
 LEFT JOIN vinfo v ON v."VM ID" = rm.moid
+LEFT JOIN vcluster vc ON vc."Name" = v."Cluster"
 JOIN rightsizing_reports r ON r.id = rm.report_id
 WHERE rm.report_id = ?
-GROUP BY rm.report_id, rm.moid, r.expected_sample_count, v."Cluster", v."CPUs", v."Memory"
+GROUP BY rm.report_id, rm.moid, r.expected_sample_count, vc."Object ID", v."Cluster", v."CPUs", v."Memory"
 ON CONFLICT DO NOTHING`
 
 	if _, err := s.db.ExecContext(ctx, query, reportID); err != nil {
@@ -245,10 +248,24 @@ ON CONFLICT DO NOTHING`
 // Utilization uses pure weighted averages (no confidence multiplier).
 // Confidence is reported separately as a vCPU-weighted score.
 // NULLIF guards prevent division-by-zero when provisioned resource data is absent.
-func (s *RightSizingStore) clusterUtilizationRows(ctx context.Context, reportIDExpr string, args ...any) ([]models.RightsizingClusterUtilization, error) {
+func (s *RightSizingStore) clusterUtilizationRows(ctx context.Context, reportIDExpr, filterExpr string, args ...any) ([]models.RightsizingClusterUtilization, error) {
+	filterSQL := ""
+	if filterExpr != "" {
+		sqlizer, err := filter.ParseWithClusterMap([]byte(filterExpr))
+		if err != nil {
+			return nil, fmt.Errorf("invalid cluster filter expression: %w", err)
+		}
+		sql, filterArgs, err := sqlizer.ToSql()
+		if err != nil {
+			return nil, fmt.Errorf("building cluster filter SQL: %w", err)
+		}
+		filterSQL = "\n  AND " + sql
+		args = append(args, filterArgs...)
+	}
 	query := `
 SELECT
     cluster_id,
+    cluster_name,
     COUNT(*) AS vm_count,
     SUM(cpu_avg_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS cpu_avg,
     SUM(cpu_p95_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS cpu_p95,
@@ -263,9 +280,10 @@ SELECT
     COALESCE(SUM(provisioned_disk_kb), 0)   AS total_provisioned_disk_kb
 FROM rightsizing_vm_utilization
 WHERE report_id = ` + reportIDExpr + `
-  AND cluster_id IS NOT NULL
-GROUP BY cluster_id
-ORDER BY cluster_id`
+  AND cluster_name IS NOT NULL
+  AND cluster_id IS NOT NULL` + filterSQL + `
+GROUP BY cluster_id, cluster_name
+ORDER BY cluster_name`
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -282,7 +300,7 @@ ORDER BY cluster_id`
 			disk, confidence       sql.NullFloat64
 		)
 		if err := rows.Scan(
-			&c.ClusterID, &c.VMCount,
+			&c.ClusterID, &c.ClusterName, &c.VMCount,
 			&cpuAvg, &cpuP95, &cpuMax,
 			&memAvg, &memP95, &memMax,
 			&disk, &confidence,
@@ -304,13 +322,15 @@ ORDER BY cluster_id`
 }
 
 // ListClusterUtilization returns weighted cluster utilization aggregates for a specific report.
-func (s *RightSizingStore) ListClusterUtilization(ctx context.Context, reportID string) ([]models.RightsizingClusterUtilization, error) {
-	return s.clusterUtilizationRows(ctx, "?", reportID)
+// filterExpr is an optional filter DSL expression (e.g. "cluster_id = 'domain-c123'"); empty means no filter.
+func (s *RightSizingStore) ListClusterUtilization(ctx context.Context, reportID, filterExpr string) ([]models.RightsizingClusterUtilization, error) {
+	return s.clusterUtilizationRows(ctx, "?", filterExpr, reportID)
 }
 
 // ListLatestClusterUtilization returns weighted cluster utilization for the latest completed
 // report, along with that report's ID so callers can include it in responses.
-func (s *RightSizingStore) ListLatestClusterUtilization(ctx context.Context) (string, []models.RightsizingClusterUtilization, error) {
+// filterExpr is an optional filter DSL expression (e.g. "cluster_id = 'domain-c123'"); empty means no filter.
+func (s *RightSizingStore) ListLatestClusterUtilization(ctx context.Context, filterExpr string) (string, []models.RightsizingClusterUtilization, error) {
 	var reportID string
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id FROM rightsizing_reports WHERE written_batch_count > 0 ORDER BY created_at DESC LIMIT 1`,
@@ -321,7 +341,7 @@ func (s *RightSizingStore) ListLatestClusterUtilization(ctx context.Context) (st
 		}
 		return "", nil, fmt.Errorf("finding latest report: %w", err)
 	}
-	clusters, err := s.clusterUtilizationRows(ctx, "?", reportID)
+	clusters, err := s.clusterUtilizationRows(ctx, "?", filterExpr, reportID)
 	return reportID, clusters, err
 }
 
