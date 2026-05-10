@@ -26,7 +26,7 @@ func (h *Handler) StartInspection(c *gin.Context) {
 	}
 
 	if len(req.VmIds) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "vmIds is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please select at least one virtual machine to run deep inspection."})
 		return
 	}
 

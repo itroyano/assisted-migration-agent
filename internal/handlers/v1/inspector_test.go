@@ -109,7 +109,7 @@ var _ = Describe("Inspector Handler", func() {
 			Expect(w.Code).To(Equal(http.StatusBadRequest))
 			var body map[string]any
 			Expect(json.Unmarshal(w.Body.Bytes(), &body)).To(Succeed())
-			Expect(body["error"]).To(Equal("vmIds is required"))
+			Expect(body["error"]).To(Equal("Please select at least one virtual machine to run deep inspection."))
 		})
 
 		It("should start inspection successfully", func() {
