@@ -31,6 +31,7 @@ type ConsoleService interface {
 type VMService interface {
 	List(ctx context.Context, params services.VMListParams) ([]models.VirtualMachineSummary, int, error)
 	Get(ctx context.Context, id string) (*models.VM, error)
+	GetFilterOptions(ctx context.Context) (models.VMFilterOptions, error)
 	UpdateMigrationExcluded(ctx context.Context, id string, excluded bool) error
 	UpdateLabels(ctx context.Context, id string, labels []string) error
 	GetAllLabels(ctx context.Context) ([]string, []int, error)

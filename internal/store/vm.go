@@ -216,6 +216,23 @@ func (s *VMStore) Get(ctx context.Context, id string) (*models.VM, error) {
 	return &result, nil
 }
 
+// GetFilterOptions returns the distinct values available for VM filtering.
+func (s *VMStore) GetFilterOptions(ctx context.Context) (models.VMFilterOptions, error) {
+	row := s.db.QueryRowContext(ctx, vmFilterOptionsQuery)
+
+	var clusters, datacenters, concernLabels, concernCategories StringArray
+	if err := row.Scan(&clusters, &datacenters, &concernLabels, &concernCategories); err != nil {
+		return models.VMFilterOptions{}, err
+	}
+
+	return models.VMFilterOptions{
+		Clusters:          clusters,
+		Datacenters:       datacenters,
+		ConcernLabels:     concernLabels,
+		ConcernCategories: concernCategories,
+	}, nil
+}
+
 // normalizeCategory validates and normalizes an issue category (case-insensitive).
 func normalizeCategory(category, issueID string) string {
 	// Valid issue categories (lowercase for case-insensitive comparison)

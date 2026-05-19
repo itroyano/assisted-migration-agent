@@ -88,6 +88,10 @@ func (p VMListParams) listOptions() []store.ListOption {
 	return opts
 }
 
+func (s *VMService) GetFilterOptions(ctx context.Context) (models.VMFilterOptions, error) {
+	return s.store.VM().GetFilterOptions(ctx)
+}
+
 // UpdateMigrationExcluded updates the migration exclusion status for a VM.
 func (s *VMService) UpdateMigrationExcluded(ctx context.Context, id string, excluded bool) error {
 	// Verify VM exists first

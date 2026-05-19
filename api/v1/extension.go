@@ -378,6 +378,16 @@ func NewVmUtilizationDetailsFromModel(d models.VmUtilizationDetails) VmUtilizati
 	}
 }
 
+// NewVMFilterOptionsFromModel converts a models.VMFilterOptions to the API type.
+func NewVMFilterOptionsFromModel(m models.VMFilterOptions) VMFilterOptionsResponse {
+	return VMFilterOptionsResponse{
+		Clusters:          m.Clusters,
+		Datacenters:       m.Datacenters,
+		ConcernLabels:     m.ConcernLabels,
+		ConcernCategories: m.ConcernCategories,
+	}
+}
+
 // NewRightsizingClusterUtilizationFromModel converts a models.RightsizingClusterUtilization to the API type.
 func NewRightsizingClusterUtilizationFromModel(c models.RightsizingClusterUtilization) RightsizingClusterUtilization {
 	return RightsizingClusterUtilization{

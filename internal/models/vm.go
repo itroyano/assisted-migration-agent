@@ -108,6 +108,14 @@ type GuestNetwork struct {
 	Network      string
 }
 
+// VMFilterOptions holds the distinct values available for filtering VMs.
+type VMFilterOptions struct {
+	Clusters          []string
+	Datacenters       []string
+	ConcernLabels     []string
+	ConcernCategories []string
+}
+
 // Folder represents a VM folder in the vCenter hierarchy.
 type Folder struct {
 	ID   string

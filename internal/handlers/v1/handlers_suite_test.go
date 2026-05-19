@@ -110,6 +110,10 @@ func (m *MockVMService) Get(ctx context.Context, id string) (*models.VM, error) 
 	return m.GetResult, m.GetError
 }
 
+func (m *MockVMService) GetFilterOptions(ctx context.Context) (models.VMFilterOptions, error) {
+	return models.VMFilterOptions{}, nil
+}
+
 func (m *MockVMService) UpdateMigrationExcluded(ctx context.Context, id string, excluded bool) error {
 	m.LastUpdateMigrationExcludedID = id
 	m.UpdateMigrationExcludedValue = excluded

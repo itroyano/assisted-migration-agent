@@ -133,6 +133,20 @@ LEFT JOIN rightsizing_vm_utilization u
 WHERE i."VM ID" = ?;
 `
 
+// vmFilterOptionsQuery returns distinct clusters, datacenters, concern labels,
+// and concern categories in a single row.
+const vmFilterOptionsQuery = `
+SELECT
+    (SELECT COALESCE(list(DISTINCT "Cluster" ORDER BY "Cluster"), [])
+     FROM vinfo WHERE "Cluster" IS NOT NULL AND "Cluster" != '') AS clusters,
+    (SELECT COALESCE(list(DISTINCT "Datacenter" ORDER BY "Datacenter"), [])
+     FROM vinfo WHERE "Datacenter" IS NOT NULL AND "Datacenter" != '') AS datacenters,
+    (SELECT COALESCE(list(DISTINCT "Label" ORDER BY "Label"), [])
+     FROM concerns WHERE "Label" IS NOT NULL AND "Label" != '') AS concern_labels,
+    (SELECT COALESCE(list(DISTINCT "Category" ORDER BY "Category"), [])
+     FROM concerns WHERE "Category" IS NOT NULL AND "Category" != '') AS concern_categories
+`
+
 // vmOutputQuery is the base aggregated output query that produces one row per VM.
 // Filters should be applied via Where clauses on the VM ID.
 var vmOutputQuery = sq.Select(

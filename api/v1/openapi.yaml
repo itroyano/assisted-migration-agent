@@ -164,6 +164,20 @@ paths:
         '500':
           description: Internal server error
 
+  /vms/filter-options:
+    get:
+      summary: Get distinct filter option values for VMs
+      operationId: getVMsFilterOptions
+      responses:
+        '200':
+          description: Filter options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VMFilterOptionsResponse'
+        '500':
+          description: Internal server error
+
   /vms/{id}:
     get:
       summary: Get details about a vm
@@ -2138,6 +2152,35 @@ components:
         label:
           type: string
           description: The label that was removed
+
+    VMFilterOptionsResponse:
+      type: object
+      required:
+        - clusters
+        - datacenters
+        - concernLabels
+        - concernCategories
+      properties:
+        clusters:
+          type: array
+          items:
+            type: string
+          description: Distinct cluster names
+        datacenters:
+          type: array
+          items:
+            type: string
+          description: Distinct datacenter names
+        concernLabels:
+          type: array
+          items:
+            type: string
+          description: Distinct concern labels
+        concernCategories:
+          type: array
+          items:
+            type: string
+          description: Distinct concern categories
 
     # --- Forecaster schemas ---
 

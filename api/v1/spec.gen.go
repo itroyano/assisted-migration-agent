@@ -121,6 +121,9 @@ type ServerInterface interface {
 	// Get list of VMs with filtering and pagination
 	// (GET /vms)
 	GetVMs(c *gin.Context, params GetVMsParams)
+	// Get distinct filter option values for VMs
+	// (GET /vms/filter-options)
+	GetVMsFilterOptions(c *gin.Context)
 	// Get all distinct labels in use across VMs
 	// (GET /vms/labels)
 	GetVMLabels(c *gin.Context)
@@ -924,6 +927,19 @@ func (siw *ServerInterfaceWrapper) GetVMs(c *gin.Context) {
 	siw.Handler.GetVMs(c, params)
 }
 
+// GetVMsFilterOptions operation middleware
+func (siw *ServerInterfaceWrapper) GetVMsFilterOptions(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetVMsFilterOptions(c)
+}
+
 // GetVMLabels operation middleware
 func (siw *ServerInterfaceWrapper) GetVMLabels(c *gin.Context) {
 
@@ -1144,6 +1160,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/rightsizing/:report_id/clusters/:cluster_id", wrapper.GetRightsizingReportCluster)
 	router.GET(options.BaseURL+"/version", wrapper.GetVersion)
 	router.GET(options.BaseURL+"/vms", wrapper.GetVMs)
+	router.GET(options.BaseURL+"/vms/filter-options", wrapper.GetVMsFilterOptions)
 	router.GET(options.BaseURL+"/vms/labels", wrapper.GetVMLabels)
 	router.DELETE(options.BaseURL+"/vms/labels/:label", wrapper.DeleteLabelGlobally)
 	router.PATCH(options.BaseURL+"/vms/labels/:label", wrapper.UpdateLabelVMs)

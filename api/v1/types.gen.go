@@ -616,6 +616,21 @@ type VMDisk struct {
 	Shared *bool `json:"shared,omitempty"`
 }
 
+// VMFilterOptionsResponse defines model for VMFilterOptionsResponse.
+type VMFilterOptionsResponse struct {
+	// Clusters Distinct cluster names
+	Clusters []string `json:"clusters"`
+
+	// ConcernCategories Distinct concern categories
+	ConcernCategories []string `json:"concernCategories"`
+
+	// ConcernLabels Distinct concern labels
+	ConcernLabels []string `json:"concernLabels"`
+
+	// Datacenters Distinct datacenter names
+	Datacenters []string `json:"datacenters"`
+}
+
 // VMIssue defines model for VMIssue.
 type VMIssue struct {
 	// Category Severity category of the issue. Unknown categories are mapped to 'Other'.

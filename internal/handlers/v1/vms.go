@@ -103,6 +103,18 @@ func (h *Handler) GetVMs(c *gin.Context, params v1.GetVMsParams) {
 	})
 }
 
+// GetVMsFilterOptions returns distinct filter option values
+// (GET /vms/filter-options)
+func (h *Handler) GetVMsFilterOptions(c *gin.Context) {
+	opts, err := h.vmSrv.GetFilterOptions(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get filter options: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, v1.NewVMFilterOptionsFromModel(opts))
+}
+
 // GetVM returns details for a specific VM
 // (GET /vms/{id})
 func (h *Handler) GetVM(c *gin.Context, id string) {
