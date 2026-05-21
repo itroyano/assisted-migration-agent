@@ -38,4 +38,5 @@ jobs:
       openapi-spec-url: "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/api/v1/openapi.yaml"
       package-name: "@openshift-migration-advisor/agent-sdk"
       package-version: ${{ needs.version.outputs.version }}
+      model-property-naming: "original"
     secrets: inherit
