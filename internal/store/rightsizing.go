@@ -51,6 +51,8 @@ const (
 	rsWarningsColMOID     = "moid"
 	rsWarningsColVMName   = "vm_name"
 	rsWarningsColWarning  = "warning"
+
+	rsUtilizationTable = "rightsizing_vm_utilization"
 )
 
 // RightSizingStore persists rightsizing report metadata and per-VM metric aggregates.
@@ -201,6 +203,7 @@ func (s *RightSizingStore) WriteVMWarnings(ctx context.Context, reportID string,
 // metrics and the vinfo inventory, persisting them to rightsizing_vm_utilization.
 // Uses a single SQL pivot query; idempotent via ON CONFLICT DO NOTHING.
 func (s *RightSizingStore) ComputeAndStoreUtilization(ctx context.Context, reportID string) error {
+	// this insert is intentionally not converted to squirrel - the resulting code is less clear
 	query := `
 INSERT INTO rightsizing_vm_utilization
     (report_id, moid, vm_name,
@@ -248,42 +251,41 @@ ON CONFLICT DO NOTHING`
 // Utilization uses pure weighted averages (no confidence multiplier).
 // Confidence is reported separately as a vCPU-weighted score.
 // NULLIF guards prevent division-by-zero when provisioned resource data is absent.
-func (s *RightSizingStore) clusterUtilizationRows(ctx context.Context, reportIDExpr, filterExpr string, args ...any) ([]models.RightsizingClusterUtilization, error) {
-	filterSQL := ""
+func (s *RightSizingStore) clusterUtilizationRows(ctx context.Context, reportID, filterExpr string) ([]models.RightsizingClusterUtilization, error) {
+	builder := sq.Select(
+		"cluster_id",
+		"cluster_name",
+		"COUNT(*) AS vm_count",
+		"SUM(cpu_avg_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS cpu_avg",
+		"SUM(cpu_p95_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS cpu_p95",
+		"SUM(cpu_max_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS cpu_max",
+		"SUM(mem_avg_pct * provisioned_memory_mb) / NULLIF(SUM(provisioned_memory_mb), 0) AS mem_avg",
+		"SUM(mem_p95_pct * provisioned_memory_mb) / NULLIF(SUM(provisioned_memory_mb), 0) AS mem_p95",
+		"SUM(mem_max_pct * provisioned_memory_mb) / NULLIF(SUM(provisioned_memory_mb), 0) AS mem_max",
+		"SUM(disk_pct * provisioned_disk_kb) / NULLIF(SUM(provisioned_disk_kb), 0) AS disk",
+		"SUM(confidence_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS confidence",
+		"COALESCE(SUM(provisioned_cpus), 0) AS total_provisioned_cpus",
+		"COALESCE(SUM(provisioned_memory_mb), 0) AS total_provisioned_memory_mb",
+		"COALESCE(SUM(provisioned_disk_kb), 0) AS total_provisioned_disk_kb",
+	).From(rsUtilizationTable).
+		Where(sq.Eq{"report_id": reportID}).
+		Where(sq.NotEq{"cluster_name": nil}).
+		Where(sq.NotEq{"cluster_id": nil}).
+		GroupBy("cluster_id", "cluster_name").
+		OrderBy("cluster_name")
+
 	if filterExpr != "" {
 		sqlizer, err := filter.ParseWithClusterMap([]byte(filterExpr))
 		if err != nil {
 			return nil, fmt.Errorf("invalid cluster filter expression: %w", err)
 		}
-		sql, filterArgs, err := sqlizer.ToSql()
-		if err != nil {
-			return nil, fmt.Errorf("building cluster filter SQL: %w", err)
-		}
-		filterSQL = "\n  AND " + sql
-		args = append(args, filterArgs...)
+		builder = builder.Where(sqlizer)
 	}
-	query := `
-SELECT
-    cluster_id,
-    cluster_name,
-    COUNT(*) AS vm_count,
-    SUM(cpu_avg_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS cpu_avg,
-    SUM(cpu_p95_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS cpu_p95,
-    SUM(cpu_max_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS cpu_max,
-    SUM(mem_avg_pct * provisioned_memory_mb) / NULLIF(SUM(provisioned_memory_mb), 0) AS mem_avg,
-    SUM(mem_p95_pct * provisioned_memory_mb) / NULLIF(SUM(provisioned_memory_mb), 0) AS mem_p95,
-    SUM(mem_max_pct * provisioned_memory_mb) / NULLIF(SUM(provisioned_memory_mb), 0) AS mem_max,
-    SUM(disk_pct * provisioned_disk_kb) / NULLIF(SUM(provisioned_disk_kb), 0) AS disk,
-    SUM(confidence_pct * provisioned_cpus) / NULLIF(SUM(provisioned_cpus), 0) AS confidence,
-    COALESCE(SUM(provisioned_cpus), 0)      AS total_provisioned_cpus,
-    COALESCE(SUM(provisioned_memory_mb), 0) AS total_provisioned_memory_mb,
-    COALESCE(SUM(provisioned_disk_kb), 0)   AS total_provisioned_disk_kb
-FROM rightsizing_vm_utilization
-WHERE report_id = ` + reportIDExpr + `
-  AND cluster_name IS NOT NULL
-  AND cluster_id IS NOT NULL` + filterSQL + `
-GROUP BY cluster_id, cluster_name
-ORDER BY cluster_name`
+
+	query, args, err := builder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("building cluster utilization query: %w", err)
+	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -324,24 +326,31 @@ ORDER BY cluster_name`
 // ListClusterUtilization returns weighted cluster utilization aggregates for a specific report.
 // filterExpr is an optional filter DSL expression (e.g. "cluster_id = 'domain-c123'"); empty means no filter.
 func (s *RightSizingStore) ListClusterUtilization(ctx context.Context, reportID, filterExpr string) ([]models.RightsizingClusterUtilization, error) {
-	return s.clusterUtilizationRows(ctx, "?", filterExpr, reportID)
+	return s.clusterUtilizationRows(ctx, reportID, filterExpr)
 }
 
 // ListLatestClusterUtilization returns weighted cluster utilization for the latest completed
 // report, along with that report's ID so callers can include it in responses.
 // filterExpr is an optional filter DSL expression (e.g. "cluster_id = 'domain-c123'"); empty means no filter.
 func (s *RightSizingStore) ListLatestClusterUtilization(ctx context.Context, filterExpr string) (string, []models.RightsizingClusterUtilization, error) {
+	latestReportSQL, latestReportArgs, err := sq.Select(rsReportsColID).
+		From(rsReportsTable).
+		Where(sq.Gt{rsReportsColWrittenBatchCount: 0}).
+		OrderBy(rsReportsColCreatedAt + " DESC").
+		Limit(1).
+		ToSql()
+	if err != nil {
+		return "", nil, fmt.Errorf("building latest report query: %w", err)
+	}
 	var reportID string
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id FROM rightsizing_reports WHERE written_batch_count > 0 ORDER BY created_at DESC LIMIT 1`,
-	).Scan(&reportID)
+	err = s.db.QueryRowContext(ctx, latestReportSQL, latestReportArgs...).Scan(&reportID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", nil, nil
 		}
 		return "", nil, fmt.Errorf("finding latest report: %w", err)
 	}
-	clusters, err := s.clusterUtilizationRows(ctx, "?", filterExpr, reportID)
+	clusters, err := s.clusterUtilizationRows(ctx, reportID, filterExpr)
 	return reportID, clusters, err
 }
 
@@ -349,19 +358,28 @@ func (s *RightSizingStore) ListLatestClusterUtilization(ctx context.Context, fil
 // completed report (written_batch_count > 0). Returns ResourceNotFoundError if no
 // rightsizing data exists for this VM.
 func (s *RightSizingStore) GetVMUtilization(ctx context.Context, moid string) (*models.VmUtilizationDetails, error) {
-	query := `
-SELECT moid, vm_name,
-       provisioned_cpus, provisioned_memory_mb, provisioned_disk_kb,
-       cpu_avg_pct, cpu_p95_pct, cpu_max_pct, cpu_latest_pct,
-       mem_avg_pct, mem_p95_pct, mem_max_pct, mem_latest_pct,
-       disk_pct, confidence_pct
-FROM rightsizing_vm_utilization
-WHERE moid = ?
-  AND report_id = (
-      SELECT id FROM rightsizing_reports
-      WHERE written_batch_count > 0
-      ORDER BY created_at DESC LIMIT 1
-  )`
+	subSQL, subArgs, err := sq.Select(rsReportsColID).
+		From(rsReportsTable).
+		Where(sq.Gt{rsReportsColWrittenBatchCount: 0}).
+		OrderBy(rsReportsColCreatedAt + " DESC").
+		Limit(1).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("building latest report subquery: %w", err)
+	}
+	query, args, err := sq.Select(
+		"moid", "vm_name",
+		"provisioned_cpus", "provisioned_memory_mb", "provisioned_disk_kb",
+		"cpu_avg_pct", "cpu_p95_pct", "cpu_max_pct", "cpu_latest_pct",
+		"mem_avg_pct", "mem_p95_pct", "mem_max_pct", "mem_latest_pct",
+		"disk_pct", "confidence_pct",
+	).From(rsUtilizationTable).
+		Where(sq.Eq{"moid": moid}).
+		Where("report_id = ("+subSQL+")", subArgs...).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("building VM utilization query: %w", err)
+	}
 
 	var d models.VmUtilizationDetails
 	var (
@@ -372,7 +390,7 @@ WHERE moid = ?
 		memAvg, memP95, memMax, memLatest sql.NullFloat64
 		disk, confidence                  sql.NullFloat64
 	)
-	err := s.db.QueryRowContext(ctx, query, moid).Scan(
+	err = s.db.QueryRowContext(ctx, query, args...).Scan(
 		&d.MOID, &d.VMName,
 		&provCpus, &provMemMb, &provDiskKb,
 		&cpuAvg, &cpuP95, &cpuMax, &cpuLatest,
