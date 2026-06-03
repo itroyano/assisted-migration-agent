@@ -21,8 +21,10 @@ import (
 )
 
 const (
-	vddkFolder  = "vddk"
-	vddkLibPath = "vmware-vix-disklib-distrib/lib64"
+	vddkFolder              = "vddk"
+	vddkLibPath             = "vmware-vix-disklib-distrib/lib64"
+	maxInflatedBytes  int64 = 1 << 30 // 1 GiB. real VDDK inflates to ~200 MiB
+	maxArchiveEntries       = 1000    // real VDDK archive has ~300 entries
 )
 
 var (
@@ -160,6 +162,8 @@ func extractTarGz(r io.Reader, destDir string) error {
 	}()
 
 	tarReader := tar.NewReader(gzr)
+	var totalWritten int64
+	var entryCount int
 
 	for {
 		header, err := tarReader.Next()
@@ -170,6 +174,11 @@ func extractTarGz(r io.Reader, destDir string) error {
 			return err
 		}
 
+		entryCount++
+		if entryCount > maxArchiveEntries {
+			return fmt.Errorf("archive contains too many entries (max %d)", maxArchiveEntries)
+		}
+
 		targetPath := filepath.Clean(filepath.Join(destDir, header.Name))
 
 		if !pathInsideDest(destDir, targetPath) {
@@ -178,22 +187,28 @@ func extractTarGz(r io.Reader, destDir string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			// create directory
-			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
+			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)&0o755); err != nil {
 				return err
 			}
 		case tar.TypeReg:
-			// create file
+			remaining := maxInflatedBytes - totalWritten
+			if remaining <= 0 {
+				return fmt.Errorf("extracted archive exceeds maximum allowed size (%d bytes)", maxInflatedBytes)
+			}
 			outFile, err := os.Create(targetPath)
 			if err != nil {
 				return err
 			}
-			if _, err := io.Copy(outFile, tarReader); err != nil {
-				_ = outFile.Close()
+			n, err := io.Copy(outFile, io.LimitReader(tarReader, remaining+1))
+			_ = outFile.Close()
+			if err != nil {
 				return err
 			}
-			_ = outFile.Close()
-			if err := os.Chmod(targetPath, os.FileMode(header.Mode)); err != nil {
+			if n > remaining {
+				return fmt.Errorf("extracted archive exceeds maximum allowed size (%d bytes)", maxInflatedBytes)
+			}
+			totalWritten += n
+			if err := os.Chmod(targetPath, os.FileMode(header.Mode)&0o755); err != nil {
 				return err
 			}
 		case tar.TypeSymlink:
