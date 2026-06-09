@@ -9,7 +9,6 @@ import (
 
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/session"
-	"github.com/vmware/govmomi/vim25/soap"
 	"go.uber.org/zap"
 
 	"github.com/kubev2v/assisted-migration-agent/internal/models"
@@ -65,17 +64,25 @@ func (m *VMManager) ValidatePrivileges(ctx context.Context, moid string, require
 }
 
 func VerifyCredentials(ctx context.Context, creds *models.Credentials, resourceName string) error {
+	if err := creds.Validate(); err != nil {
+		return err
+	}
+
 	u, err := url.ParseRequestURI(creds.URL)
 	if err != nil {
 		return err
 	}
-
 	u.User = url.UserPassword(creds.Username, creds.Password)
 
 	verifyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	vimClient, err := vim25.NewClient(verifyCtx, soap.NewClient(u, true))
+	soapClient, err := NewSoapClient(u, creds.SkipTLS, creds.CACert)
+	if err != nil {
+		return err
+	}
+
+	vimClient, err := vim25.NewClient(verifyCtx, soapClient)
 	if err != nil {
 		return err
 	}

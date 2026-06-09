@@ -252,6 +252,51 @@ var _ = Describe("Rightsizing Handlers", func() {
 
 			Expect(w.Code).To(Equal(http.StatusInternalServerError))
 		})
+
+		It("should wire cacert into RightsizingParams", func() {
+			caCert := generateCACertPEM()
+			mockSvc.TriggerResult = &models.RightsizingReportSummary{ID: "r1"}
+			body, _ := json.Marshal(map[string]interface{}{
+				"credentials": map[string]interface{}{
+					"url":      "https://vcenter.example.com/sdk",
+					"username": "admin",
+					"password": "secret",
+					"cacert":   caCert,
+				},
+			})
+			req := httptest.NewRequest(http.MethodPost, "/rightsizing", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			Expect(w.Code).To(Equal(http.StatusAccepted))
+			Expect(mockSvc.LastTriggerParams.CACert).To(Equal([]byte(caCert)))
+			Expect(mockSvc.LastTriggerParams.SkipTLS).To(BeFalse())
+		})
+
+		It("should return 400 when both cacert and skipTls=true are provided", func() {
+			body, _ := json.Marshal(map[string]interface{}{
+				"credentials": map[string]interface{}{
+					"url":      "https://vcenter.example.com/sdk",
+					"username": "admin",
+					"password": "secret",
+					"cacert":   generateCACertPEM(),
+					"skipTls":  true,
+				},
+			})
+			req := httptest.NewRequest(http.MethodPost, "/rightsizing", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			Expect(w.Code).To(Equal(http.StatusBadRequest))
+			Expect(mockSvc.TriggerCallCount).To(Equal(0))
+			var resp map[string]string
+			Expect(json.Unmarshal(w.Body.Bytes(), &resp)).To(Succeed())
+			Expect(resp["error"]).To(ContainSubstring("mutually exclusive"))
+		})
 	})
 
 	Describe("ListRightsizingReportClusters", func() {

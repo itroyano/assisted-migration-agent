@@ -107,16 +107,24 @@ func createProvider(creds *models.Credentials) *api.Provider {
 
 // createSecret creates a Kubernetes Secret with vCenter credentials.
 func createSecret(creds *models.Credentials) *core.Secret {
+	skipVerify := "false"
+	if creds.SkipTLS {
+		skipVerify = "true"
+	}
+	data := map[string][]byte{
+		"user":               []byte(creds.Username),
+		"password":           []byte(creds.Password),
+		"insecureSkipVerify": []byte(skipVerify),
+	}
+	if len(creds.CACert) > 0 {
+		data["ca.crt"] = creds.CACert
+	}
 	return &core.Secret{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "vsphere-secret",
 			Namespace: "default",
 		},
-		Data: map[string][]byte{
-			"user":               []byte(creds.Username),
-			"password":           []byte(creds.Password),
-			"insecureSkipVerify": []byte("true"),
-		},
+		Data: data,
 	}
 }
 

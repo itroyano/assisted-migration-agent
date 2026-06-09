@@ -14,7 +14,6 @@ import (
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/session"
 	"github.com/vmware/govmomi/vim25"
-	"github.com/vmware/govmomi/vim25/soap"
 
 	"go.uber.org/zap"
 
@@ -111,7 +110,7 @@ func (f *ForecasterService) Start(ctx context.Context, req models.ForecastReques
 
 	zap.S().Infow("starting forecaster", "pairs", len(req.Pairs), "diskSizeGB", req.DiskSizeGB, "iterations", req.Iterations, "concurrency", req.Concurrency)
 
-	vClient, err := vmware.NewVsphereClient(ctx, cred.URL, cred.Username, cred.Password, true)
+	vClient, err := vmware.NewVsphereClient(ctx, &cred)
 	if err != nil {
 		zap.S().Named("forecaster_service").Errorw("failed to connect to vSphere", "error", err)
 		return srvErrors.NewVCenterError(err)
@@ -171,6 +170,10 @@ func (f *ForecasterService) VerifyCredentials(ctx context.Context, credentials m
 	}
 	credentials.URL = u
 
+	if err := credentials.Validate(); err != nil {
+		return err
+	}
+
 	if err := f.verifyCredentialsAndPrivileges(ctx, &credentials, models.ForecasterRequiredPrivileges); err != nil {
 		return err
 	}
@@ -191,7 +194,11 @@ func (f *ForecasterService) verifyCredentialsAndPrivileges(ctx context.Context, 
 	verifyCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	vimClient, err := vim25.NewClient(verifyCtx, soap.NewClient(u, true))
+	soapClient, err := vmware.NewSoapClient(u, creds.SkipTLS, creds.CACert)
+	if err != nil {
+		return err
+	}
+	vimClient, err := vim25.NewClient(verifyCtx, soapClient)
 	if err != nil {
 		return err
 	}
@@ -246,6 +253,9 @@ func (f *ForecasterService) resolveCredentials(ctx context.Context, creds models
 	creds.URL = u
 
 	if creds.URL != "" {
+		if err := creds.Validate(); err != nil {
+			return models.Credentials{}, err
+		}
 		if err := f.verifyCredentialsAndPrivileges(ctx, &creds, models.ForecasterRequiredPrivileges); err != nil {
 			return models.Credentials{}, err
 		}

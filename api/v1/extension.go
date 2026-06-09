@@ -1,11 +1,37 @@
 package v1
 
 import (
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/kubev2v/assisted-migration-agent/internal/models"
 )
+
+// CredsFromAPI converts a VcenterCredentials API type to models.Credentials.
+func CredsFromAPI(v VcenterCredentials) (models.Credentials, error) {
+	c := models.Credentials{
+		URL:      v.Url,
+		Username: v.Username,
+		Password: v.Password,
+	}
+	if v.Cacert != nil {
+		if v.SkipTls != nil && *v.SkipTls {
+			return models.Credentials{}, errors.New("skipTls and cacert are mutually exclusive")
+		}
+		pemBytes := []byte(*v.Cacert)
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pemBytes) {
+			return models.Credentials{}, errors.New("cacert: no valid PEM certificates found")
+		}
+		c.CACert = pemBytes
+	} else {
+		// no cacert: default to skip-verify for backwards compat unless explicitly false
+		c.SkipTLS = v.SkipTls == nil || *v.SkipTls
+	}
+	return c, nil
+}
 
 func (a *AgentStatus) FromModel(m models.AgentStatus) {
 	switch m.Console.Current {

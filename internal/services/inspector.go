@@ -94,7 +94,11 @@ func (i *InspectorService) Start(ctx context.Context, creds models.Credentials, 
 	}
 	creds.URL = url
 
-	vClient, err := vmware.NewVsphereClient(ctx, creds.URL, creds.Username, creds.Password, true)
+	if err := creds.Validate(); err != nil {
+		return err
+	}
+
+	vClient, err := vmware.NewVsphereClient(ctx, &creds)
 	if err != nil {
 		zap.S().Named("inspector_service").Errorw("failed to connect to vSphere", "error", err)
 		return srvErrors.NewVCenterError(err)

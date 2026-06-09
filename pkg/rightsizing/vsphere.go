@@ -2,6 +2,8 @@ package rightsizing
 
 import (
 	"context"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"maps"
 	"net/url"
@@ -42,6 +44,7 @@ type Config struct {
 	Username   string
 	Password   string
 	Insecure   bool
+	CACert     []byte
 	NameFilter string
 	ClusterID  string
 	Lookback   time.Duration
@@ -63,6 +66,23 @@ type VMReport struct {
 	Warnings []string
 }
 
+// buildSoapClient creates a SOAP client with TLS configured from the given
+// parameters. CACert content is never included in error messages or logs.
+// Mirrors vmware.NewSoapClient; kept separate to avoid cross-package coupling.
+func buildSoapClient(u *url.URL, insecure bool, caCert []byte) (*soap.Client, error) {
+	sc := soap.NewClient(u, insecure)
+	if len(caCert) == 0 {
+		return sc, nil
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caCert) {
+		return nil, errors.New("invalid CA bundle: no valid PEM certificates found")
+	}
+	// soap.NewClient always initialises TLSClientConfig.
+	sc.DefaultTransport().TLSClientConfig.RootCAs = pool
+	return sc, nil
+}
+
 // Connect authenticates a govmomi client. Never logs the password.
 func Connect(ctx context.Context, cfg Config) (*govmomi.Client, error) {
 	u, err := soap.ParseURL(cfg.VCenterURL)
@@ -71,7 +91,11 @@ func Connect(ctx context.Context, cfg Config) (*govmomi.Client, error) {
 	}
 	u.User = url.UserPassword(cfg.Username, cfg.Password)
 
-	soapClient := soap.NewClient(u, cfg.Insecure)
+	soapClient, err := buildSoapClient(u, cfg.Insecure, cfg.CACert)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure TLS: %w", err)
+	}
+
 	vimClient, err := vim25.NewClient(ctx, soapClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vim25 client: %w", err)

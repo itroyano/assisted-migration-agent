@@ -25,6 +25,7 @@ func getVCenterCredentials() models.Credentials {
 		URL:      "https://localhost:8989/sdk",
 		Username: "user",
 		Password: "pass",
+		SkipTLS:  true,
 	}
 }
 

@@ -297,6 +297,81 @@ var _ = Describe("Collector Handlers", func() {
 			Expect(json.Unmarshal(w.Body.Bytes(), &response)).To(Succeed())
 			Expect(response["error"]).To(Equal("unexpected error"))
 		})
+
+		It("should wire cacert from the request body", func() {
+			caCert := generateCACertPEM()
+			body, _ := json.Marshal(map[string]interface{}{
+				"url":      "https://vcenter.example.com/sdk",
+				"username": "admin",
+				"password": "secret",
+				"cacert":   caCert,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/collector", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			Expect(w.Code).To(Equal(http.StatusAccepted))
+			Expect(mockCollector.LastCreds.CACert).To(Equal([]byte(caCert)))
+			Expect(mockCollector.LastCreds.SkipTLS).To(BeFalse())
+		})
+
+		It("should wire skipTls=true from the request body", func() {
+			body, _ := json.Marshal(map[string]interface{}{
+				"url":      "https://vcenter.example.com/sdk",
+				"username": "admin",
+				"password": "secret",
+				"skipTls":  true,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/collector", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			Expect(w.Code).To(Equal(http.StatusAccepted))
+			Expect(mockCollector.LastCreds.SkipTLS).To(BeTrue())
+			Expect(mockCollector.LastCreds.CACert).To(BeNil())
+		})
+
+		It("should return 400 when both cacert and skipTls=true are provided", func() {
+			body, _ := json.Marshal(map[string]interface{}{
+				"url":      "https://vcenter.example.com/sdk",
+				"username": "admin",
+				"password": "secret",
+				"cacert":   generateCACertPEM(),
+				"skipTls":  true,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/collector", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			Expect(w.Code).To(Equal(http.StatusBadRequest))
+			Expect(mockCollector.StartCallCount).To(Equal(0))
+			var resp map[string]string
+			Expect(json.Unmarshal(w.Body.Bytes(), &resp)).To(Succeed())
+			Expect(resp["error"]).To(ContainSubstring("mutually exclusive"))
+		})
+
+		It("should default SkipTLS to true when neither field is provided (backwards compat)", func() {
+			body, _ := json.Marshal(map[string]interface{}{
+				"url":      "https://vcenter.example.com/sdk",
+				"username": "admin",
+				"password": "secret",
+			})
+			req := httptest.NewRequest(http.MethodPost, "/collector", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			Expect(w.Code).To(Equal(http.StatusAccepted))
+			Expect(mockCollector.LastCreds.SkipTLS).To(BeTrue())
+			Expect(mockCollector.LastCreds.CACert).To(BeNil())
+		})
 	})
 
 	Describe("StopCollector", func() {

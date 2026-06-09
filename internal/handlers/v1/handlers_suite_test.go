@@ -2,8 +2,16 @@ package v1_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"io"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -14,6 +22,20 @@ import (
 	"github.com/kubev2v/assisted-migration-agent/internal/models"
 	"github.com/kubev2v/assisted-migration-agent/internal/services"
 )
+
+// generateCACertPEM returns a PEM-encoded self-signed CA certificate for use in handler tests.
+func generateCACertPEM() string {
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test-ca"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		IsCA:         true,
+	}
+	der, _ := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+}
 
 func TestHandlers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -32,6 +54,7 @@ type MockCollectorService struct {
 	StartError     error
 	StartCallCount int
 	StopCallCount  int
+	LastCreds      models.Credentials
 }
 
 func (m *MockCollectorService) GetStatus() models.CollectorStatus {
@@ -40,6 +63,7 @@ func (m *MockCollectorService) GetStatus() models.CollectorStatus {
 
 func (m *MockCollectorService) Start(ctx context.Context, creds models.Credentials) error {
 	m.StartCallCount++
+	m.LastCreds = creds
 	return m.StartError
 }
 
@@ -154,6 +178,7 @@ type MockInspectorService struct {
 	CancelVmsInspectionCallCount int
 	StopCallCount                int
 	IsBusyResult                 bool
+	LastCreds                    models.Credentials
 }
 
 func (m *MockInspectorService) IsBusy() bool {
@@ -162,11 +187,13 @@ func (m *MockInspectorService) IsBusy() bool {
 
 func (m *MockInspectorService) Start(ctx context.Context, creds models.Credentials, vmIDs []string) error {
 	m.StartCallCount++
+	m.LastCreds = creds
 	return m.StartError
 }
 
 func (m *MockInspectorService) Credentials(ctx context.Context, creds models.Credentials) error {
 	_, _ = ctx, creds
+	m.LastCreds = creds
 	return m.CredentialsError
 }
 

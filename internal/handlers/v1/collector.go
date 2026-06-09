@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/kubev2v/assisted-migration-agent/api/v1"
-	"github.com/kubev2v/assisted-migration-agent/internal/models"
 	srvErrors "github.com/kubev2v/assisted-migration-agent/pkg/errors"
 )
 
@@ -26,10 +25,14 @@ func (h *Handler) StartCollector(c *gin.Context) {
 		return
 	}
 
-	creds := models.Credentials{
-		URL:      req.Url,
-		Username: req.Username,
-		Password: req.Password,
+	creds, err := v1.CredsFromAPI(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := creds.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	if err := h.collectorSrv.Start(c.Request.Context(), creds); err != nil {

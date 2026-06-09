@@ -249,13 +249,8 @@ func buildVSphereConfig(params models.RightsizingParams, lookback time.Duration)
 		VCenterURL: params.URL,
 		Username:   params.Username,
 		Password:   params.Password,
-		// TLS verification is skipped because on-prem vCenter deployments almost universally use
-		// self-signed certificates, and even CA-signed certs frequently fail verification due to
-		// SAN mismatches (the cert is issued for the FQDN but the agent may connect via IP or alias).
-		// So, in order to provide a valid cert, the vCenter admins will need to hav a cert for each of the possible IPs/aliases the agent might use.
-		// The risk is accepted: the agent runs inside the customer's own network, so the MITM
-		// threat model is low.
-		Insecure:   true,
+		Insecure:   params.SkipTLS,
+		CACert:     params.CACert,
 		NameFilter: params.NameFilter,
 		ClusterID:  params.ClusterID,
 		Lookback:   lookback,
@@ -268,6 +263,9 @@ func buildVSphereConfig(params models.RightsizingParams, lookback time.Duration)
 // The report shell is persisted in DuckDB synchronously before returning (202 Accepted).
 // Callers poll GET /rightsizing/{id} to observe metrics being populated.
 func (s *RightsizingService) TriggerCollection(ctx context.Context, params models.RightsizingParams) (*models.RightsizingReportSummary, error) {
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
 	applyCollectionDefaults(&params)
 
 	s.mu.Lock()

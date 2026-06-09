@@ -63,15 +63,21 @@ func (h *Handler) TriggerRightsizingCollection(c *gin.Context) {
 		return
 	}
 
+	creds, err := v1.CredsFromAPI(req.Credentials)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := creds.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	params := models.RightsizingParams{
-		Credentials: models.Credentials{
-			URL:      req.Credentials.Url,
-			Username: req.Credentials.Username,
-			Password: req.Credentials.Password,
-		},
-		LookbackH:  defaultInt(req.LookbackHours, 720),
-		IntervalID: defaultInt(req.IntervalId, 7200),
-		BatchSize:  defaultInt(req.BatchSize, 64),
+		Credentials: creds,
+		LookbackH:   defaultInt(req.LookbackHours, 720),
+		IntervalID:  defaultInt(req.IntervalId, 7200),
+		BatchSize:   defaultInt(req.BatchSize, 64),
 	}
 	if req.NameFilter != nil {
 		params.NameFilter = *req.NameFilter

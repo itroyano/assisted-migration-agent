@@ -52,11 +52,16 @@ func (h *Handler) StartForecaster(c *gin.Context) {
 		Pairs: pairs,
 	}
 	if req.Credentials != nil {
-		forecastReq.Credentials = models.Credentials{
-			URL:      req.Credentials.Url,
-			Username: req.Credentials.Username,
-			Password: req.Credentials.Password,
+		creds, err := v1api.CredsFromAPI(*req.Credentials)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
+		if err := creds.Validate(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		forecastReq.Credentials = creds
 	}
 	if req.DiskSizeGb != nil {
 		forecastReq.DiskSizeGB = *req.DiskSizeGb
@@ -156,10 +161,14 @@ func (h *Handler) PutForecasterCredentials(c *gin.Context) {
 		return
 	}
 
-	creds := models.Credentials{
-		URL:      req.Url,
-		Username: req.Username,
-		Password: req.Password,
+	creds, err := v1api.CredsFromAPI(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := creds.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	if err := h.forecasterSrv.VerifyCredentials(c.Request.Context(), creds); err != nil {

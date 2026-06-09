@@ -1644,6 +1644,21 @@ components:
           minLength: 1
           x-oapi-codegen-extra-tags:
             binding: "required,min=1"
+        cacert:
+          type: string
+          description: >-
+            PEM-encoded CA certificate bundle for verifying the vCenter TLS
+            certificate. Mutually exclusive with skipTls.
+          x-oapi-codegen-extra-tags:
+            binding: "omitempty"
+        skipTls:
+          type: boolean
+          description: >-
+            When true, TLS certificate verification is skipped. Must not be set
+            to true alongside cacert — that combination returns 400. When
+            omitted: if cacert is absent the connection skips TLS verification
+            (backwards compatibility); if cacert is provided the connection
+            verifies TLS using that certificate — skipTls need not be sent.
 
     Group:
       type: object

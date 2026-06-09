@@ -690,7 +690,12 @@ type VMNIC struct {
 
 // VcenterCredentials defines model for VcenterCredentials.
 type VcenterCredentials struct {
-	Password string `binding:"required,min=1" json:"password"`
+	// Cacert PEM-encoded CA certificate bundle for verifying the vCenter TLS certificate. Mutually exclusive with skipTls.
+	Cacert   *string `binding:"omitempty" json:"cacert,omitempty"`
+	Password string  `binding:"required,min=1" json:"password"`
+
+	// SkipTls When true, TLS certificate verification is skipped. Must not be set to true alongside cacert — that combination returns 400. When omitted: if cacert is absent the connection skips TLS verification (backwards compatibility); if cacert is provided the connection verifies TLS using that certificate — skipTls need not be sent.
+	SkipTls *bool `json:"skipTls,omitempty"`
 
 	// Url vCenter URL
 	Url      string `binding:"required,url" json:"url"`

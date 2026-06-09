@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/kubev2v/assisted-migration-agent/api/v1"
-	"github.com/kubev2v/assisted-migration-agent/internal/models"
 	srvErrors "github.com/kubev2v/assisted-migration-agent/pkg/errors"
 )
 
@@ -39,10 +38,14 @@ func (h *Handler) StartInspection(c *gin.Context) {
 		return
 	}
 
-	creds := models.Credentials{
-		URL:      req.Credentials.Url,
-		Username: req.Credentials.Username,
-		Password: req.Credentials.Password,
+	creds, err := v1.CredsFromAPI(req.Credentials)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := creds.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	if err := h.inspectorSrv.Start(c.Request.Context(), creds, req.VmIds); err != nil {
@@ -107,10 +110,14 @@ func (h *Handler) ValidateInspectorCredentials(c *gin.Context) {
 		return
 	}
 
-	creds := models.Credentials{
-		URL:      req.Url,
-		Username: req.Username,
-		Password: req.Password,
+	creds, err := v1.CredsFromAPI(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := creds.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	if err := h.inspectorSrv.Credentials(c.Request.Context(), creds); err != nil {
