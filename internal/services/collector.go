@@ -59,13 +59,13 @@ func (c *CollectorService) Start(ctx context.Context, creds models.Credentials) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.workSrv != nil && c.workSrv.IsRunning() {
-		return srvErrors.NewCollectionInProgressError()
-	}
-
 	inv, err := c.inventorySrv.GetInventory(ctx)
 	if err == nil && inv != nil {
 		return nil
+	}
+
+	if c.workSrv != nil && c.workSrv.IsRunning() {
+		return srvErrors.NewCollectionInProgressError()
 	}
 
 	url, err := vmware.NormalizeAndValidateURL(creds.URL)

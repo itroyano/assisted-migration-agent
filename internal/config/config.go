@@ -38,6 +38,7 @@ type Agent struct {
 	OpaPoliciesFolder   string        `debugmap:"visible"`
 	UpdateInterval      time.Duration `debugmap:"visible" default:"5s"`
 	LegacyStatusEnabled bool          `debugmap:"visible" default:"true"`
+	RetainCollections   int           `debugmap:"visible" default:"1"`
 }
 
 type Console struct {

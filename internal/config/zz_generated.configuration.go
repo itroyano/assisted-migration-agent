@@ -221,6 +221,7 @@ func (a *Agent) ToOption() AgentOption {
 		to.OpaPoliciesFolder = a.OpaPoliciesFolder
 		to.UpdateInterval = a.UpdateInterval
 		to.LegacyStatusEnabled = a.LegacyStatusEnabled
+		to.RetainCollections = a.RetainCollections
 	}
 }
 
@@ -237,6 +238,7 @@ func (a *Agent) DebugMap() map[string]any {
 	debugMap["OpaPoliciesFolder"] = helpers.DebugValue(a.OpaPoliciesFolder, false)
 	debugMap["UpdateInterval"] = helpers.DebugValue(a.UpdateInterval, false)
 	debugMap["LegacyStatusEnabled"] = helpers.DebugValue(a.LegacyStatusEnabled, false)
+	debugMap["RetainCollections"] = helpers.DebugValue(a.RetainCollections, false)
 	return debugMap
 }
 
@@ -323,6 +325,13 @@ func WithUpdateInterval(updateInterval time.Duration) AgentOption {
 func WithLegacyStatusEnabled(legacyStatusEnabled bool) AgentOption {
 	return func(a *Agent) {
 		a.LegacyStatusEnabled = legacyStatusEnabled
+	}
+}
+
+// WithRetainCollections returns an option that can set RetainCollections on a Agent
+func WithRetainCollections(retainCollections int) AgentOption {
+	return func(a *Agent) {
+		a.RetainCollections = retainCollections
 	}
 }
 

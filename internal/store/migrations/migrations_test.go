@@ -159,5 +159,25 @@ var _ = Describe("Migrations", func() {
 			`)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		// Given migrations have been applied
+		// When we insert a row into collections without specifying id
+		// Then it should succeed and get a sequence-assigned ID > 0
+		It("should create collections table with sequence-assigned id", func() {
+			err := migrations.Run(ctx, db)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = db.ExecContext(ctx, `
+				INSERT INTO collections (vcenter_id, state, active)
+				VALUES ('default', 'running', false)
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			var id int64
+			err = db.QueryRowContext(ctx, `SELECT id FROM collections WHERE vcenter_id = 'default'`).Scan(&id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(id).To(BeNumerically(">", 0))
+		})
+
 	})
 })

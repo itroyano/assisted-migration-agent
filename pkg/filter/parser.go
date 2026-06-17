@@ -45,6 +45,10 @@ func ParseWithClusterMap(src []byte) (sq.Sqlizer, error) {
 	return Parse(src, clusterMapFn)
 }
 
+func ParseWithCollectionMap(src []byte) (sq.Sqlizer, error) {
+	return Parse(src, collectionMapFn)
+}
+
 // Parse parses a filter expression and returns a Sqlizer that can be used with SelectBuilder.Where().
 func Parse(src []byte, mf MapFunc) (sq.Sqlizer, error) {
 	expr, err := parse(src)

@@ -25,10 +25,12 @@ type Store struct {
 	transactor    pkgstore.Transactor
 	application   *ApplicationStore
 	credentials   *CredentialsStore
+	collection    *CollectionStore
 }
 
 func NewStore(db *sql.DB, validator duckdb_parser.Validator) *Store {
 	qi := pkgstore.NewQueryInterceptor(db)
+	transactor := pkgstore.NewTransactor(db)
 	parser := duckdb_parser.New(qi, validator)
 	return &Store{
 		db:            db,
@@ -42,9 +44,10 @@ func NewStore(db *sql.DB, validator duckdb_parser.Validator) *Store {
 		outbox:        NewOutboxStore(qi),
 		rightsizing:   NewRightSizingStore(qi),
 		forecast:      NewForecastStore(qi),
-		transactor:    pkgstore.NewTransactor(db),
+		transactor:    transactor,
 		application:   NewApplicationStore(qi),
 		credentials:   NewCredentialsStore(qi),
+		collection:    NewCollectionStore(qi),
 	}
 }
 
@@ -106,6 +109,10 @@ func (s *Store) Application() *ApplicationStore {
 
 func (s *Store) Credentials() *CredentialsStore {
 	return s.credentials
+}
+
+func (s *Store) Collection() *CollectionStore {
+	return s.collection
 }
 
 func (s *Store) WithTx(ctx context.Context, fn func(ctx context.Context) error) error {

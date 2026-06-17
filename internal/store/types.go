@@ -2,6 +2,12 @@ package store
 
 import "fmt"
 
+// rowScanner is satisfied by both *sql.Row and *sql.Rows, allowing scanXxx
+// functions to work with both single-row and multi-row query results.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
 // StringArray is a scanner for DuckDB VARCHAR[] arrays.
 // DuckDB returns arrays as []interface{}, this converts them to []string.
 type StringArray []string

@@ -71,6 +71,7 @@ var _ = Describe("ConfigurationStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(retrieved.AgentMode).To(Equal(models.AgentModeConnected))
 		})
+
 	})
 
 	Context("Save", func() {

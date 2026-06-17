@@ -248,6 +248,32 @@ var clusterMapFn MapFunc = func(name string) (string, FieldType, error) {
 	}
 }
 
+// collectionMapFn maps collection DSL field names to SQL column names.
+// Column name strings must stay in sync with constants in internal/store/collection.go.
+var collectionMapFn MapFunc = func(name string) (string, FieldType, error) {
+	switch strings.ToLower(name) {
+	case "id":
+		// BIGINT column — NumericField allows range comparisons (>, <, >=, <=).
+		return "id", NumericField, nil
+	case "vcenter_id":
+		return "vcenter_id", StringField, nil
+	case "vcenter":
+		return "vcenter", StringField, nil
+	case "state":
+		return "state", StringField, nil
+	case "active":
+		return "active", BooleanField, nil
+	case "started_at", "finished_at", "created_at", "updated_at":
+		// TIMESTAMP columns — AnyField skips type validation so both string-literal
+		// equality and ordering comparisons work via DuckDB's implicit casting.
+		return name, AnyField, nil
+	case "error":
+		return "error", StringField, nil
+	default:
+		return "", 0, fmt.Errorf("unknown collection filter field: %s", name)
+	}
+}
+
 func toSql(expr Expression, mf MapFunc) (sq.Sqlizer, error) {
 	switch e := expr.(type) {
 	case *binaryExpression:
