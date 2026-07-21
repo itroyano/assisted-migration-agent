@@ -315,6 +315,10 @@ func initPool(cfg *config.Configuration) (*store.Pool, error) {
 	pool.Add(mainDB)
 	zap.S().Infow("registered main database", "path", mainDB.Path)
 
+	if err := cleanupStaleCollections(mainDB, cfg.Agent.DataFolder); err != nil {
+		zap.S().Errorw("failed to cleanup stale collections", "error", err)
+	}
+
 	matches, _ := filepath.Glob(filepath.Join(cfg.Agent.DataFolder, "collection_*.duckdb"))
 	for _, match := range matches {
 		name := strings.TrimSuffix(filepath.Base(match), ".duckdb")
@@ -436,4 +440,38 @@ func registerAgentFlags(flagSet *pflag.FlagSet, config *config.Configuration) {
 func registerConsoleFlags(flagSet *pflag.FlagSet, config *config.Configuration) {
 	flagSet.StringVar(&config.Console.URL, "console-url", config.Console.URL, "URL of console.redhat.com")
 	flagSet.DurationVar(&config.Agent.UpdateInterval, "console-update-interval", config.Agent.UpdateInterval, "Interval for console status updates")
+}
+
+// cleanupStaleCollections removes leftover collection markers and their DuckDB
+// files from disk. Any row in the collections table at startup is stale,
+// successful collections delete their marker during finalize.
+// Running collections are also treated as stale because the agent crashed
+// before the finalization step.
+func cleanupStaleCollections(mainDB *store.Database, dataFolder string) error {
+	st, err := mainDB.Store()
+	if err != nil {
+		return fmt.Errorf("failed to get main store: %w", err)
+	}
+
+	collections, err := st.Collection().List(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to list stale collections: %w", err)
+	}
+
+	for _, col := range collections {
+		dbFile := filepath.Join(dataFolder, col.Database+".duckdb")
+		if err := os.Remove(dbFile); err != nil && !os.IsNotExist(err) {
+			zap.S().Warnw("failed to remove stale collection file", "file", dbFile, "error", err)
+			continue
+		}
+
+		if err := st.Collection().Delete(context.Background(), col.Database); err != nil {
+			zap.S().Warnw("failed to delete stale collection marker", "database", col.Database, "error", err)
+			continue
+		}
+
+		zap.S().Infow("cleaned up stale collection", "database", col.Database, "state", col.State)
+	}
+
+	return nil
 }
